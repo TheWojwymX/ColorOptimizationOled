@@ -1,0 +1,196 @@
+#pragma kernel RGB_TO_LAB
+#pragma kernel LAB_TO_RGB
+
+RWTexture2D<float4> Result;
+Texture2D<float4>  Input;
+
+RWStructuredBuffer<float> EnergyOriginal;
+RWStructuredBuffer<float> EnergyOptimized;
+
+float DeltaEFovea;
+float DeltaEParafovea;
+float DeltaEPeriphery;
+
+float FoveaRadius;
+float ParafoveaRadius;
+
+int CandidateSamples;
+float3 OLEDWeights;
+int2 ImageSize;
+
+static const float PI = 3.14159265;
+static const float3 D65 = float3(0.95047, 1.0, 1.08883);
+
+static const float3x3 RGB_TO_XYZ = float3x3(
+    0.4124564, 0.3575761, 0.1804375,
+    0.2126729, 0.7151522, 0.0721750,
+    0.0193339, 0.1191920, 0.9503041
+);
+
+static const float3x3 XYZ_TO_RGB = float3x3(
+     3.2404542, -1.5371385, -0.4985314,
+    -0.9692660,  1.8760108,  0.0415560,
+     0.0556434, -0.2040259,  1.0572252
+);
+
+// ---------- LAB helpers ----------
+float3 LabF(float3 t)
+{
+    const float d = 6.0 / 29.0;
+    return lerp(
+        pow(t, 1.0 / 3.0),
+        t / (3.0 * d * d) + 4.0 / 29.0,
+        step(t, d * d * d)
+    );
+}
+
+float3 LabFInv(float3 t)
+{
+    const float d = 6.0 / 29.0;
+    return lerp(
+        t * t * t,
+        3.0 * d * d * (t - 4.0 / 29.0),
+        step(t, d)
+    );
+}
+
+// ---------- Linear → sRGB ----------
+float3 LinearToSRGB(float3 c)
+{
+    return lerp(
+        1.055 * pow(c, 1.0 / 2.4) - 0.055,
+        12.92 * c,
+        step(c, 0.0031308)
+    );
+}
+
+// ---------- OLED Energy ----------
+float EnergyOLED(float3 rgbLinear)
+{
+    return dot(rgbLinear, OLEDWeights);
+}
+
+// ---------- Punkty na powierzchni sfery ----------
+float3 LabSampleOnSphere(float radius, int sampleIndex, int totalSamples)
+{
+    float u = (sampleIndex + 0.5) / totalSamples;
+    float v = frac(sampleIndex * 0.61803398875);
+
+    float theta = 2.0 * PI * u;
+    float phi   = acos(2.0 * v - 1.0);
+
+    return radius * float3(
+        sin(phi) * cos(theta),
+        sin(phi) * sin(theta),
+        cos(phi)
+    );
+}
+
+// ---------- Foveation ----------
+float GetDeltaE(uint2 id)
+{
+    float2 center = float2(ImageSize) * 0.5;
+    float dist = distance(id, center);
+
+    float norm = dist / ImageSize.x;
+
+    if (norm < FoveaRadius)
+        return DeltaEFovea;
+
+    if (norm < ParafoveaRadius)
+        return DeltaEParafovea;
+
+    return DeltaEPeriphery;
+}
+
+// =======================
+// RGB → LAB
+// =======================
+[numthreads(8,8,1)]
+void RGB_TO_LAB(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= ImageSize.x || id.y >= ImageSize.y)
+        return;
+
+    float3 rgb = Input[id.xy].rgb;
+    float3 xyz = mul(RGB_TO_XYZ, rgb);
+    float3 f = LabF(xyz / D65);
+
+    float3 lab;
+    lab.x = 116.0 * f.y - 16.0;
+    lab.y = 500.0 * (f.x - f.y);
+    lab.z = 200.0 * (f.y - f.z);
+
+    Result[id.xy] = float4(lab, 1.0);
+}
+
+// =======================
+// LAB → RGB + OLED opt
+// =======================
+[numthreads(8,8,1)]
+void LAB_TO_RGB(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= ImageSize.x || id.y >= ImageSize.y)
+        return;
+
+    uint index = id.y * ImageSize.x + id.x;
+
+    float2 center = float2(ImageSize) * 0.5;
+    float dist = distance(id.xy, center);
+    float norm = dist / ImageSize.x;
+
+    // ---------- Smooth foveated ΔE ----------
+    float t1 = smoothstep(FoveaRadius, ParafoveaRadius, norm);
+    float t2 = smoothstep(ParafoveaRadius, 0.5, norm);
+
+    float d1 = lerp(DeltaEFovea, DeltaEParafovea, t1);
+    float d2 = lerp(DeltaEParafovea, DeltaEPeriphery, t2);
+
+    float deltaE = lerp(d1, d2, t2);
+    float3 baseLab = Input[id.xy].rgb;
+
+    // ---------- LAB → RGB ----------
+    float fy0 = (baseLab.x + 16.0) / 116.0;
+    float fx0 = fy0 + baseLab.y / 500.0;
+    float fz0 = fy0 - baseLab.z / 200.0;
+
+    float3 xyzBase = LabFInv(float3(fx0, fy0, fz0)) * D65;
+    float3 baseRGB = mul(XYZ_TO_RGB, xyzBase);
+
+    float baseEnergy = EnergyOLED(baseRGB);
+
+    float bestEnergy = baseEnergy;
+    float3 bestRGB = baseRGB;
+
+    // ---------- Energy optimization ----------
+    [loop]
+    for (int i = 0; i < CandidateSamples; i++)
+    {
+        float3 candidateLab = baseLab + LabSampleOnSphere(deltaE, i, CandidateSamples);
+
+        float fy = (candidateLab.x + 16.0) / 116.0;
+        float fx = fy + candidateLab.y / 500.0;
+        float fz = fy - candidateLab.z / 200.0;
+
+        float3 xyz = LabFInv(float3(fx, fy, fz)) * D65;
+        float3 rgb = mul(XYZ_TO_RGB, xyz);
+
+        if (any(rgb < 0) || any(rgb > 1))
+            continue;
+
+        float e = EnergyOLED(rgb);
+
+        if (e < bestEnergy)
+        {
+            bestEnergy = e;
+            bestRGB = rgb;
+        }
+    }
+
+    EnergyOriginal[index] = baseEnergy;
+    EnergyOptimized[index] = bestEnergy;
+
+    float3 srgb = LinearToSRGB(bestRGB);
+
+    Result[id.xy] = float4(srgb, 1.0);
+}
