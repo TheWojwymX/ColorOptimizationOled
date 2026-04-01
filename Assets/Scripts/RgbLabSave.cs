@@ -23,7 +23,11 @@ public class RgbLabSave : MonoBehaviour
     [Range(1,1024)]
     public int candidateSamples = 8;
 
-    public Vector3 oledWeights = new Vector3(0.265f,0.670f,0.065f);
+    [Header("OLED Model (paper-based)")]
+    public float wr = 0.25f;
+    public float wg = 0.65f;
+    public float wb = 0.10f;
+    public float wrgb = 0.05f;
 
     const int THREADS = 8;
 
@@ -65,7 +69,13 @@ public class RgbLabSave : MonoBehaviour
         compute.SetFloat("ParafoveaRadius",parafoveaRadius);
 
         compute.SetInt("CandidateSamples",candidateSamples);
-        compute.SetVector("OLEDWeights",oledWeights);
+
+        // 🔥 NOWY MODEL OLED
+        compute.SetFloat("wr", wr);
+        compute.SetFloat("wg", wg);
+        compute.SetFloat("wb", wb);
+        compute.SetFloat("wrgb", wrgb);
+
         compute.SetInts("ImageSize",w,h);
 
         Dispatch(kLabToRgb,w,h);

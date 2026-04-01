@@ -269,9 +269,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 09f1e096cb1cd9a4dbf872e1a2c4d05e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RgbLabPostProcess
-  compute: {fileID: 7200000, guid: 92ecc9fd7fa6090418316d3d46dd1561, type: 3}
-  kernel: 0
-  temp: {fileID: 0}
 --- !u!1 &410087039
 GameObject:
   m_ObjectHideFlags: 0
@@ -447,12 +444,15 @@ MonoBehaviour:
   inputTexture: {fileID: 2800000, guid: 46abf765c88b9774599605f6a177e77e, type: 3}
   outputFileName: OledOptimized.png
   deltaEFovea: 2
-  deltaEParafovea: 5
-  deltaEPeriphery: 10
+  deltaEParafovea: 4
+  deltaEPeriphery: 8
   foveaRadius: 0.08
   parafoveaRadius: 0.25
-  candidateSamples: 1024
-  oledWeights: {x: 0.265, y: 0.67, z: 0.065}
+  candidateSamples: 512
+  wr: 0.25
+  wg: 0.65
+  wb: 0.1
+  wrgb: 0.05
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0

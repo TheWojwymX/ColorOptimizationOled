@@ -15,8 +15,11 @@ float FoveaRadius;
 float ParafoveaRadius;
 
 int CandidateSamples;
-float3 OLEDWeights;
 int2 ImageSize;
+
+// 🔥 OLED MODEL (paper-based)
+float wr, wg, wb;
+float wrgb;
 
 static const float PI = 3.14159265;
 static const float3 D65 = float3(0.95047, 1.0, 1.08883);
@@ -64,13 +67,21 @@ float3 LinearToSRGB(float3 c)
     );
 }
 
-// ---------- OLED Energy ----------
-float EnergyOLED(float3 rgbLinear)
+// ---------- OLED Energy (FINAL MODEL) ----------
+float EnergyOLED(float3 rgb)
 {
-    return dot(rgbLinear, OLEDWeights);
+    float R = rgb.r;
+    float G = rgb.g;
+    float B = rgb.b;
+
+    return
+        wr * R +
+        wg * G +
+        wb * B +
+        wrgb * R * G * B;
 }
 
-// ---------- Punkty na powierzchni sfery ----------
+// ---------- LAB sphere sampling ----------
 float3 LabSampleOnSphere(float radius, int sampleIndex, int totalSamples)
 {
     float u = (sampleIndex + 0.5) / totalSamples;
@@ -84,23 +95,6 @@ float3 LabSampleOnSphere(float radius, int sampleIndex, int totalSamples)
         sin(phi) * sin(theta),
         cos(phi)
     );
-}
-
-// ---------- Foveation ----------
-float GetDeltaE(uint2 id)
-{
-    float2 center = float2(ImageSize) * 0.5;
-    float dist = distance(id, center);
-
-    float norm = dist / ImageSize.x;
-
-    if (norm < FoveaRadius)
-        return DeltaEFovea;
-
-    if (norm < ParafoveaRadius)
-        return DeltaEParafovea;
-
-    return DeltaEPeriphery;
 }
 
 // =======================
