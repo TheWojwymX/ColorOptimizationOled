@@ -441,14 +441,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RgbLabSave
   compute: {fileID: 7200000, guid: 0d065d0e67e828849a9f1592d9f34567, type: 3}
-  inputTexture: {fileID: 2800000, guid: 46abf765c88b9774599605f6a177e77e, type: 3}
+  inputTexture: {fileID: 2800000, guid: 72d481266f89dff4cb26e24f157453f5, type: 3}
   outputFileName: OledOptimized.png
   deltaEFovea: 2
-  deltaEParafovea: 4
-  deltaEPeriphery: 8
+  deltaEParafovea: 5
+  deltaEPeriphery: 10
   foveaRadius: 0.08
   parafoveaRadius: 0.25
-  candidateSamples: 512
+  candidateSamples: 16
   wr: 0.25
   wg: 0.65
   wb: 0.1
