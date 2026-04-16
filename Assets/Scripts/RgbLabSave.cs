@@ -13,15 +13,15 @@ public class RgbLabSave : MonoBehaviour
     public float deltaEPeriphery = 10f;
 
     [Header("Foveated Radii")]
-    [Range(0f,0.5f)]
+    [Range(0f, 0.5f)]
     public float foveaRadius = 0.08f;
 
-    [Range(0f,0.5f)]
+    [Range(0f, 0.5f)]
     public float parafoveaRadius = 0.25f;
 
     [Header("Optimization")]
-    [Range(1,1024)]
-    public int candidateSamples = 8;
+    [Range(1, 64)]
+    public int candidateSamples = 32;
 
     [Header("OLED Model (paper-based)")]
     public float wr = 0.25f;
@@ -40,49 +40,50 @@ public class RgbLabSave : MonoBehaviour
         int h = inputTexture.height;
         int pixelCount = w * h;
 
-        RenderTexture src = CreateRT(w,h);
+        RenderTexture src = CreateRT(w, h);
         Graphics.Blit(inputTexture, src);
 
-        RenderTexture lab = CreateRT(w,h);
-        RenderTexture dst = CreateRT(w,h);
+        RenderTexture lab = CreateRT(w, h);
+        RenderTexture dst = CreateRT(w, h);
 
-        ComputeBuffer energyOriginal = new ComputeBuffer(pixelCount,sizeof(float));
-        ComputeBuffer energyOptimized = new ComputeBuffer(pixelCount,sizeof(float));
+        ComputeBuffer energyOriginal = new ComputeBuffer(pixelCount, sizeof(float));
+        ComputeBuffer energyOptimized = new ComputeBuffer(pixelCount, sizeof(float));
 
-        compute.SetTexture(kRgbToLab,"Input",src);
-        compute.SetTexture(kRgbToLab,"Result",lab);
-        compute.SetInts("ImageSize",w,h);
+        // ---------- RGB → LAB ----------
+        compute.SetTexture(kRgbToLab, "Input", src);
+        compute.SetTexture(kRgbToLab, "Result", lab);
+        compute.SetInts("ImageSize", w, h);
+        compute.SetInt("CandidateSamples", candidateSamples);
 
-        Dispatch(kRgbToLab,w,h);
+        Dispatch(kRgbToLab, w, h);
 
-        compute.SetTexture(kLabToRgb,"Input",lab);
-        compute.SetTexture(kLabToRgb,"Result",dst);
+        // ---------- LAB → RGB ----------
+        compute.SetTexture(kLabToRgb, "Input", lab);
+        compute.SetTexture(kLabToRgb, "Result", dst);
 
-        compute.SetBuffer(kLabToRgb,"EnergyOriginal",energyOriginal);
-        compute.SetBuffer(kLabToRgb,"EnergyOptimized",energyOptimized);
+        compute.SetBuffer(kLabToRgb, "EnergyOriginal", energyOriginal);
+        compute.SetBuffer(kLabToRgb, "EnergyOptimized", energyOptimized);
 
-        compute.SetFloat("DeltaEFovea",deltaEFovea);
-        compute.SetFloat("DeltaEParafovea",deltaEParafovea);
-        compute.SetFloat("DeltaEPeriphery",deltaEPeriphery);
+        compute.SetFloat("DeltaEFovea", deltaEFovea);
+        compute.SetFloat("DeltaEParafovea", deltaEParafovea);
+        compute.SetFloat("DeltaEPeriphery", deltaEPeriphery);
 
-        compute.SetFloat("FoveaRadius",foveaRadius);
-        compute.SetFloat("ParafoveaRadius",parafoveaRadius);
+        compute.SetFloat("FoveaRadius", foveaRadius);
+        compute.SetFloat("ParafoveaRadius", parafoveaRadius);
 
-        compute.SetInt("CandidateSamples",candidateSamples);
+        compute.SetInts("ImageSize", w, h);
 
-        // 🔥 NOWY MODEL OLED
         compute.SetFloat("wr", wr);
         compute.SetFloat("wg", wg);
         compute.SetFloat("wb", wb);
         compute.SetFloat("wrgb", wrgb);
 
-        compute.SetInts("ImageSize",w,h);
+        Dispatch(kLabToRgb, w, h);
 
-        Dispatch(kLabToRgb,w,h);
-
-        Texture2D outTex = new Texture2D(w,h,TextureFormat.RGBA32,false);
+        // ---------- readback ----------
+        Texture2D outTex = new Texture2D(w, h, TextureFormat.RGBA32, false);
         RenderTexture.active = dst;
-        outTex.ReadPixels(new Rect(0,0,w,h),0,0);
+        outTex.ReadPixels(new Rect(0, 0, w, h), 0, 0);
         outTex.Apply();
         RenderTexture.active = null;
 
@@ -94,16 +95,16 @@ public class RgbLabSave : MonoBehaviour
         energyOriginal.GetData(orig);
         energyOptimized.GetData(opt);
 
-        double sumOrig=0;
-        double sumOpt=0;
+        double sumOrig = 0;
+        double sumOpt = 0;
 
-        for(int i=0;i<pixelCount;i++)
+        for (int i = 0; i < pixelCount; i++)
         {
-            sumOrig+=orig[i];
-            sumOpt+=opt[i];
+            sumOrig += orig[i];
+            sumOpt += opt[i];
         }
 
-        double savedPercent = 100.0*(1.0 - sumOpt/sumOrig);
+        double savedPercent = 100.0 * (1.0 - sumOpt / sumOrig);
 
         Debug.Log($"OLED Energy Saved: {savedPercent:F4}%");
 
@@ -115,28 +116,28 @@ public class RgbLabSave : MonoBehaviour
         dst.Release();
     }
 
-    RenderTexture CreateRT(int w,int h)
+    RenderTexture CreateRT(int w, int h)
     {
-        RenderTexture rt = new RenderTexture(w,h,0,RenderTextureFormat.ARGBFloat);
-        rt.enableRandomWrite=true;
+        RenderTexture rt = new RenderTexture(w, h, 0, RenderTextureFormat.ARGBFloat);
+        rt.enableRandomWrite = true;
         rt.Create();
         return rt;
     }
 
-    void Dispatch(int kernel,int w,int h)
+    void Dispatch(int kernel, int w, int h)
     {
         compute.Dispatch(kernel,
-            Mathf.CeilToInt(w/(float)THREADS),
-            Mathf.CeilToInt(h/(float)THREADS),
+            Mathf.CeilToInt(w / (float)THREADS),
+            Mathf.CeilToInt(h / (float)THREADS),
             1);
     }
 
     void Save(Texture2D tex)
     {
         byte[] bytes = tex.EncodeToPNG();
-        string path = Path.Combine(Application.dataPath,outputFileName);
-        File.WriteAllBytes(path,bytes);
+        string path = Path.Combine(Application.dataPath, outputFileName);
+        File.WriteAllBytes(path, bytes);
 
-        Debug.Log("Saved to: "+path);
+        Debug.Log("Saved to: " + path);
     }
 }
