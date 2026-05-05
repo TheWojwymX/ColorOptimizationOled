@@ -23,7 +23,7 @@ public class RgbLabSave : MonoBehaviour
     [Range(1, 64)]
     public int candidateSamples = 16;
 
-    [Header("OLED Model (paper-based)")]
+    [Header("OLED Model")]
     public float wr = 0.25f;
     public float wg = 0.65f;
     public float wb = 0.10f;

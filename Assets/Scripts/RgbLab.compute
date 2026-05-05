@@ -3,6 +3,7 @@
 
 RWTexture2D<float4> Result;
 Texture2D<float4> Input;
+RWStructuredBuffer<int> Fence;
 
 RWStructuredBuffer<float> EnergyOriginal;
 RWStructuredBuffer<float> EnergyOptimized;
@@ -38,6 +39,7 @@ static const float3x3 XYZ_TO_RGB = float3x3(
 // ---------------- LAB ----------------
 float3 LabF(float3 t)
 {
+    t = max(t, 1e-6);
     const float d = 6.0 / 29.0;
     return lerp(pow(t, 1.0/3.0), t/(3.0*d*d) + 4.0/29.0, step(t, d*d*d));
 }
@@ -48,8 +50,10 @@ float3 LabFInv(float3 t)
     return lerp(t*t*t, 3.0*d*d*(t - 4.0/29.0), step(t, d));
 }
 
+// ---------------- SRGB ----------------
 float3 LinearToSRGB(float3 c)
 {
+    c = saturate(c);
     return lerp(1.055 * pow(c, 1.0/2.4) - 0.055, 12.92 * c, step(c, 0.0031308));
 }
 
@@ -59,14 +63,30 @@ float EnergyOLED(float3 rgb)
     return wr * rgb.r + wg * rgb.g + wb * rgb.b + wrgb * rgb.r * rgb.g * rgb.b;
 }
 
-// ---------------- uniform cone (1/8 sphere, NO jitter) ----------------
+// ---------------- SAFE RGB ----------------
+float3 SafeRGB(float3 rgb)
+{
+    return saturate(rgb);
+}
+
+// ---------------- Random Points ----------------
+float2 Rand(uint2 id, int i)
+{
+    uint seed = id.x * 73856093u ^ id.y * 19349663u ^ i * 83492791u;
+    seed = (seed << 13) ^ seed;
+    float x = frac(seed * 0.0000001);
+    float y = frac(seed * 0.00000013);
+    return float2(x, y);
+}
+
+// ---------------- CONE ----------------
 float3 SampleCone8(float3 dir, float u, float v, float coneAngle)
 {
     float theta = 2.0 * PI * u;
 
     float cosMax = cos(coneAngle);
     float cosPhi = lerp(1.0, cosMax, v);
-    float sinPhi = sqrt(1.0 - cosPhi * cosPhi);
+    float sinPhi = sqrt(max(0.0, 1.0 - cosPhi * cosPhi));
 
     float3 local = float3(
         cos(theta) * sinPhi,
@@ -78,11 +98,7 @@ float3 SampleCone8(float3 dir, float u, float v, float coneAngle)
     float3 right = normalize(cross(dir, up));
     float3 forward = cross(right, dir);
 
-    return normalize(
-        right * local.x +
-        forward * local.y +
-        dir * local.z
-    );
+    return normalize(right * local.x + forward * local.y + dir * local.z);
 }
 
 // ---------------- RGB → LAB ----------------
@@ -130,14 +146,14 @@ void LAB_TO_RGB(uint3 id : SV_DispatchThreadID)
     float fx0 = fy0 + baseLab.y/500;
     float fz0 = fy0 - baseLab.z/200;
 
-    float3 baseRGB = mul(XYZ_TO_RGB, LabFInv(float3(fx0,fy0,fz0)) * D65);
+    float3 baseRGB = SafeRGB(mul(XYZ_TO_RGB, LabFInv(float3(fx0,fy0,fz0)) * D65));
     float baseE = EnergyOLED(baseRGB);
 
     float bestE = baseE;
     float3 bestRGB = baseRGB;
 
     // =========================================================
-    // LEVEL 1 (8 dirs)
+    // LEVEL 1
     // =========================================================
     float3 dirs[8] = {
         normalize(float3( 1, 1, 1)),
@@ -151,7 +167,6 @@ void LAB_TO_RGB(uint3 id : SV_DispatchThreadID)
     };
 
     float3 bestDir = dirs[0];
-    float bestDirE = baseE;
 
     [unroll]
     for(int i=0;i<8;i++)
@@ -162,21 +177,19 @@ void LAB_TO_RGB(uint3 id : SV_DispatchThreadID)
         float fx = fy + lab.y/500;
         float fz = fy - lab.z/200;
 
-        float3 rgb = mul(XYZ_TO_RGB, LabFInv(float3(fx,fy,fz)) * D65);
-
-        if(any(rgb<0)||any(rgb>1)) continue;
+        float3 rgb = SafeRGB(mul(XYZ_TO_RGB, LabFInv(float3(fx,fy,fz)) * D65));
 
         float e = EnergyOLED(rgb);
 
-        if(e < bestDirE)
+        if(e < bestE)
         {
-            bestDirE = e;
+            bestE = e;
             bestDir = dirs[i];
         }
     }
 
     // =========================================================
-    // LEVEL 2 (uniform cone sampling)
+    // CONE SEARCH (optimized RNG)
     // =========================================================
 
     float coneAngle = 0.65;
@@ -184,10 +197,9 @@ void LAB_TO_RGB(uint3 id : SV_DispatchThreadID)
     [loop]
     for(int i=0;i<CandidateSamples;i++)
     {
-        float u = frac(i * 0.61803398875);
-        float v = (i + 0.5) / CandidateSamples;
+        float2 r = Rand(id.xy, i);
 
-        float3 refinedDir = SampleCone8(bestDir, u, v, coneAngle);
+        float3 refinedDir = SampleCone8(bestDir, r.x, r.y, coneAngle);
 
         float3 lab = baseLab + refinedDir * deltaE;
 
@@ -195,9 +207,7 @@ void LAB_TO_RGB(uint3 id : SV_DispatchThreadID)
         float fx = fy + lab.y/500;
         float fz = fy - lab.z/200;
 
-        float3 rgb = mul(XYZ_TO_RGB, LabFInv(float3(fx,fy,fz)) * D65);
-
-        if(any(rgb<0)||any(rgb>1)) continue;
+        float3 rgb = SafeRGB(mul(XYZ_TO_RGB, LabFInv(float3(fx,fy,fz)) * D65));
 
         float e = EnergyOLED(rgb);
 
@@ -212,4 +222,5 @@ void LAB_TO_RGB(uint3 id : SV_DispatchThreadID)
     EnergyOptimized[index] = bestE;
 
     Result[id.xy] = float4(LinearToSRGB(bestRGB),1);
+    Fence[0] = 1;
 }

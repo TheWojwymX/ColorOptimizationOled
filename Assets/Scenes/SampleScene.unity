@@ -406,6 +406,7 @@ GameObject:
   m_Component:
   - component: {fileID: 694399795}
   - component: {fileID: 694399796}
+  - component: {fileID: 694399797}
   m_Layer: 0
   m_Name: EnergyOptimizer
   m_TagString: Untagged
@@ -441,11 +442,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RgbLabSave
   compute: {fileID: 7200000, guid: 0d065d0e67e828849a9f1592d9f34567, type: 3}
-  inputTexture: {fileID: 2800000, guid: 72d481266f89dff4cb26e24f157453f5, type: 3}
+  inputTexture: {fileID: 2800000, guid: 46abf765c88b9774599605f6a177e77e, type: 3}
   outputFileName: OledOptimized.png
   deltaEFovea: 2
-  deltaEParafovea: 5
-  deltaEPeriphery: 10
+  deltaEParafovea: 4
+  deltaEPeriphery: 8
   foveaRadius: 0.08
   parafoveaRadius: 0.25
   candidateSamples: 16
@@ -453,6 +454,26 @@ MonoBehaviour:
   wg: 0.65
   wb: 0.1
   wrgb: 0.05
+--- !u!114 &694399797
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 694399793}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7fbd920c3fd61bb4c8828cd7aa388f74, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GPUTimer
+  compute: {fileID: 7200000, guid: 0d065d0e67e828849a9f1592d9f34567, type: 3}
+  inputTexture: {fileID: 2800000, guid: 72d481266f89dff4cb26e24f157453f5, type: 3}
+  deltaEFovea: 2
+  deltaEParafovea: 5
+  deltaEPeriphery: 10
+  foveaRadius: 0.08
+  parafoveaRadius: 0.25
+  candidateSamples: 32
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0

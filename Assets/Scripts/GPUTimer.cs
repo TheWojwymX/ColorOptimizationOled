@@ -1,7 +1,6 @@
-using System.Collections;
 using UnityEngine;
+using System.Collections;
 using UnityEngine.Rendering;
-using Debug = UnityEngine.Debug;
 
 public class GPUTimer : MonoBehaviour
 {
@@ -21,10 +20,16 @@ public class GPUTimer : MonoBehaviour
 
     const int THREADS = 8;
 
+    ComputeBuffer energyOriginal;
+    ComputeBuffer energyOptimized;
+
+    int kRgbToLab;
+    int kLabToRgb;
+
     IEnumerator Start()
     {
-        int kRgbToLab = compute.FindKernel("RGB_TO_LAB");
-        int kLabToRgb = compute.FindKernel("LAB_TO_RGB");
+        kRgbToLab = compute.FindKernel("RGB_TO_LAB");
+        kLabToRgb = compute.FindKernel("LAB_TO_RGB");
 
         int w = inputTexture.width;
         int h = inputTexture.height;
@@ -36,22 +41,70 @@ public class GPUTimer : MonoBehaviour
 
         Graphics.Blit(inputTexture, src);
 
-        ComputeBuffer energyOriginal = new ComputeBuffer(pixelCount, sizeof(float));
-        ComputeBuffer energyOptimized = new ComputeBuffer(pixelCount, sizeof(float));
+        energyOriginal = new ComputeBuffer(pixelCount, sizeof(float));
+        energyOptimized = new ComputeBuffer(pixelCount, sizeof(float));
 
-        // ---------------- BIND ----------------
+        int gx = Mathf.CeilToInt(w / (float)THREADS);
+        int gy = Mathf.CeilToInt(h / (float)THREADS);
+
+        // =========================
+        // WARMUP (IMPORTANT)
+        // =========================
+        for (int i = 0; i < 5; i++)
+        {
+            Run(src, lab, dst, gx, gy);
+        }
+
+        yield return null;
+
+        // =========================
+        // BENCHMARK
+        // =========================
+        int iterations = 30;
+        float totalMs = 0f;
+
+        for (int i = 0; i < iterations; i++)
+        {
+            float start = Time.realtimeSinceStartup;
+
+            Run(src, lab, dst, gx, gy);
+
+            // REAL GPU sync point
+            yield return new WaitForEndOfFrame();
+
+            float end = Time.realtimeSinceStartup;
+            totalMs += (end - start) * 1000f;
+        }
+
+        Debug.Log($"AVG GPU+PIPELINE TIME: {totalMs / iterations:F3} ms");
+        Debug.Log($"CandidateSamples = {candidateSamples}");
+
+        energyOriginal.Release();
+        energyOptimized.Release();
+    }
+
+    // =========================================================
+    // FULL PIPELINE
+    // =========================================================
+    void Run(RenderTexture src, RenderTexture lab, RenderTexture dst, int gx, int gy)
+    {
+        // ---------------- RGB → LAB ----------------
         compute.SetTexture(kRgbToLab, "Input", src);
         compute.SetTexture(kRgbToLab, "Result", lab);
-        compute.SetInts("ImageSize", w, h);
+        compute.SetInts("ImageSize", src.width, src.height);
+
+        compute.Dispatch(kRgbToLab, gx, gy, 1);
+
+        // ---------------- LAB → RGB ----------------
+
+        // 🔥 ALWAYS BIND BEFORE DISPATCH (FIX CRASH)
+        compute.SetBuffer(kLabToRgb, "EnergyOriginal", energyOriginal);
+        compute.SetBuffer(kLabToRgb, "EnergyOptimized", energyOptimized);
 
         compute.SetTexture(kLabToRgb, "Input", lab);
         compute.SetTexture(kLabToRgb, "Result", dst);
 
-        compute.SetBuffer(kLabToRgb, "EnergyOriginal", energyOriginal);
-        compute.SetBuffer(kLabToRgb, "EnergyOptimized", energyOptimized);
-
-        // 🔥 IMPORTANT: ALL PARAMETERS
-        compute.SetInt("CandidateSamples", candidateSamples);
+        compute.SetInts("ImageSize", src.width, src.height);
 
         compute.SetFloat("DeltaEFovea", deltaEFovea);
         compute.SetFloat("DeltaEParafovea", deltaEParafovea);
@@ -60,50 +113,9 @@ public class GPUTimer : MonoBehaviour
         compute.SetFloat("FoveaRadius", foveaRadius);
         compute.SetFloat("ParafoveaRadius", parafoveaRadius);
 
-        // ---------------- WARMUP ----------------
-        Dispatch(kRgbToLab, w, h);
-        Dispatch(kLabToRgb, w, h);
+        compute.SetInt("CandidateSamples", candidateSamples);
 
-        yield return new WaitForSeconds(0.1f);
-
-        // ---------------- BENCH ----------------
-        int iterations = 10;
-        float totalMs = 0f;
-
-        ComputeBuffer sync = new ComputeBuffer(1, sizeof(float));
-
-        for (int i = 0; i < iterations; i++)
-        {
-            bool done = false;
-            float start = Time.realtimeSinceStartup;
-
-            Dispatch(kRgbToLab, w, h);
-            Dispatch(kLabToRgb, w, h);
-
-            AsyncGPUReadback.Request(sync, (AsyncGPUReadbackRequest req) =>
-            {
-                totalMs += (Time.realtimeSinceStartup - start) * 1000f;
-                done = true;
-            });
-
-            while (!done)
-                yield return null;
-        }
-
-        Debug.Log($"AVG GPU TIME: {totalMs / iterations:F3} ms");
-        Debug.Log($"CandidateSamples = {candidateSamples}");
-
-        energyOriginal.Release();
-        energyOptimized.Release();
-        sync.Release();
-    }
-
-    void Dispatch(int k, int w, int h)
-    {
-        compute.Dispatch(k,
-            Mathf.CeilToInt(w / (float)THREADS),
-            Mathf.CeilToInt(h / (float)THREADS),
-            1);
+        compute.Dispatch(kLabToRgb, gx, gy, 1);
     }
 
     RenderTexture CreateRT(int w, int h)
