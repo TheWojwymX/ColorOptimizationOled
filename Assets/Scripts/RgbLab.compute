@@ -3,7 +3,7 @@
 
 RWTexture2D<float4> Result;
 Texture2D<float4> Input;
-RWStructuredBuffer<int> Fence;
+//RWStructuredBuffer<int> Fence;
 
 RWStructuredBuffer<float> EnergyOriginal;
 RWStructuredBuffer<float> EnergyOptimized;
@@ -60,7 +60,16 @@ float3 LinearToSRGB(float3 c)
 // ---------------- ENERGY ----------------
 float EnergyOLED(float3 rgb)
 {
-    return wr * rgb.r + wg * rgb.g + wb * rgb.b + wrgb * rgb.r * rgb.g * rgb.b;
+    rgb = saturate(rgb);
+
+    float luminance =
+        0.2126 * pow(rgb.r, 2.4) +
+        0.7152 * pow(rgb.g, 2.2) +
+        0.0722 * pow(rgb.b, 2.8);
+
+    return luminance;
+    
+    //return wr * rgb.r + wg * rgb.g + wb * rgb.b + wrgb * rgb.r * rgb.g * rgb.b;
 }
 
 // ---------------- SAFE RGB ----------------
@@ -222,5 +231,5 @@ void LAB_TO_RGB(uint3 id : SV_DispatchThreadID)
     EnergyOptimized[index] = bestE;
 
     Result[id.xy] = float4(LinearToSRGB(bestRGB),1);
-    Fence[0] = 1;
+    //Fence[0] = 1;
 }

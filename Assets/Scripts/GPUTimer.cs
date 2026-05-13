@@ -23,6 +23,9 @@ public class GPUTimer : MonoBehaviour
     ComputeBuffer energyOriginal;
     ComputeBuffer energyOptimized;
 
+    // NEW
+    ComputeBuffer fenceBuffer;
+
     int kRgbToLab;
     int kLabToRgb;
 
@@ -44,11 +47,14 @@ public class GPUTimer : MonoBehaviour
         energyOriginal = new ComputeBuffer(pixelCount, sizeof(float));
         energyOptimized = new ComputeBuffer(pixelCount, sizeof(float));
 
+        // Fence = 1 int
+        fenceBuffer = new ComputeBuffer(1, sizeof(int));
+
         int gx = Mathf.CeilToInt(w / (float)THREADS);
         int gy = Mathf.CeilToInt(h / (float)THREADS);
 
         // =========================
-        // WARMUP (IMPORTANT)
+        // WARMUP
         // =========================
         for (int i = 0; i < 5; i++)
         {
@@ -65,14 +71,22 @@ public class GPUTimer : MonoBehaviour
 
         for (int i = 0; i < iterations; i++)
         {
+            // reset fence
+            int[] reset = { 0 };
+            fenceBuffer.SetData(reset);
+
             float start = Time.realtimeSinceStartup;
 
             Run(src, lab, dst, gx, gy);
 
-            // REAL GPU sync point
-            yield return new WaitForEndOfFrame();
+            // HARD GPU SYNC
+            AsyncGPUReadbackRequest req =
+                AsyncGPUReadback.Request(fenceBuffer);
+
+            yield return new WaitUntil(() => req.done);
 
             float end = Time.realtimeSinceStartup;
+
             totalMs += (end - start) * 1000f;
         }
 
@@ -81,25 +95,25 @@ public class GPUTimer : MonoBehaviour
 
         energyOriginal.Release();
         energyOptimized.Release();
+        fenceBuffer.Release();
     }
 
-    // =========================================================
-    // FULL PIPELINE
-    // =========================================================
     void Run(RenderTexture src, RenderTexture lab, RenderTexture dst, int gx, int gy)
     {
-        // ---------------- RGB → LAB ----------------
+        // RGB -> LAB
         compute.SetTexture(kRgbToLab, "Input", src);
         compute.SetTexture(kRgbToLab, "Result", lab);
         compute.SetInts("ImageSize", src.width, src.height);
 
         compute.Dispatch(kRgbToLab, gx, gy, 1);
 
-        // ---------------- LAB → RGB ----------------
+        // LAB -> RGB
 
-        // 🔥 ALWAYS BIND BEFORE DISPATCH (FIX CRASH)
         compute.SetBuffer(kLabToRgb, "EnergyOriginal", energyOriginal);
         compute.SetBuffer(kLabToRgb, "EnergyOptimized", energyOptimized);
+
+        // IMPORTANT
+        compute.SetBuffer(kLabToRgb, "Fence", fenceBuffer);
 
         compute.SetTexture(kLabToRgb, "Input", lab);
         compute.SetTexture(kLabToRgb, "Result", dst);
@@ -124,5 +138,12 @@ public class GPUTimer : MonoBehaviour
         rt.enableRandomWrite = true;
         rt.Create();
         return rt;
+    }
+
+    void OnDestroy()
+    {
+        energyOriginal?.Release();
+        energyOptimized?.Release();
+        fenceBuffer?.Release();
     }
 }
