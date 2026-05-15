@@ -1,0 +1,393 @@
+#pragma kernel RGB_TO_LAB
+#pragma kernel LAB_TO_RGB
+
+Texture2D<float4> Input;
+RWTexture2D<float4> Result;
+
+// =====================================================
+// PARAMETERS
+// =====================================================
+
+float DeltaEFovea;
+float DeltaEParafovea;
+float DeltaEPeriphery;
+
+float FoveaRadius;
+float ParafoveaRadius;
+
+int CandidateSamples;
+
+int2 ImageSize;
+
+float wr;
+float wg;
+float wb;
+float wrgb;
+
+// =====================================================
+
+static const float PI = 3.14159265;
+
+static const float3 D65 =
+    float3(0.95047, 1.0, 1.08883);
+
+// =====================================================
+// RGB <-> XYZ
+// =====================================================
+
+static const float3x3 RGB_TO_XYZ = float3x3(
+    0.4124564, 0.3575761, 0.1804375,
+    0.2126729, 0.7151522, 0.0721750,
+    0.0193339, 0.1191920, 0.9503041
+);
+
+static const float3x3 XYZ_TO_RGB = float3x3(
+     3.2404542, -1.5371385, -0.4985314,
+    -0.9692660,  1.8760108,  0.0415560,
+     0.0556434, -0.2040259,  1.0572252
+);
+
+// =====================================================
+// LAB HELPERS
+// =====================================================
+
+float3 LabF(float3 t)
+{
+    t = max(t, 1e-6);
+
+    const float d = 6.0 / 29.0;
+
+    return lerp(
+        pow(t, 1.0/3.0),
+        t/(3.0*d*d) + 4.0/29.0,
+        step(t, d*d*d)
+    );
+}
+
+float3 LabFInv(float3 t)
+{
+    const float d = 6.0 / 29.0;
+
+    return lerp(
+        t*t*t,
+        3.0*d*d*(t - 4.0/29.0),
+        step(t, d)
+    );
+}
+
+// =====================================================
+// ENERGY MODEL
+// =====================================================
+
+float EnergyOLED(float3 rgb)
+{
+    rgb = saturate(rgb);
+
+    float luminance =
+        0.2126 * pow(rgb.r, 2.4) +
+        0.7152 * pow(rgb.g, 2.2) +
+        0.0722 * pow(rgb.b, 2.8);
+
+    return luminance;
+
+    // alternative model:
+    // return wr * rgb.r +
+    //        wg * rgb.g +
+    //        wb * rgb.b +
+    //        wrgb * rgb.r * rgb.g * rgb.b;
+}
+
+// =====================================================
+
+float3 SafeRGB(float3 rgb)
+{
+    return saturate(rgb);
+}
+
+// =====================================================
+// RANDOM
+// =====================================================
+
+float2 Rand(uint2 id, int i)
+{
+    uint seed =
+        id.x * 73856093u ^
+        id.y * 19349663u ^
+        i * 83492791u;
+
+    seed = (seed << 13) ^ seed;
+
+    float x = frac(seed * 0.0000001);
+    float y = frac(seed * 0.00000013);
+
+    return float2(x, y);
+}
+
+// =====================================================
+// CONE SAMPLE
+// =====================================================
+
+float3 SampleCone8(
+    float3 dir,
+    float u,
+    float v,
+    float coneAngle
+)
+{
+    float theta = 2.0 * PI * u;
+
+    float cosMax = cos(coneAngle);
+
+    float cosPhi = lerp(1.0, cosMax, v);
+
+    float sinPhi =
+        sqrt(max(0.0, 1.0 - cosPhi * cosPhi));
+
+    float3 local = float3(
+        cos(theta) * sinPhi,
+        sin(theta) * sinPhi,
+        cosPhi
+    );
+
+    float3 up =
+        abs(dir.z) < 0.99
+        ? float3(0,0,1)
+        : float3(0,1,0);
+
+    float3 right = normalize(cross(dir, up));
+
+    float3 forward = cross(right, dir);
+
+    return normalize(
+        right * local.x +
+        forward * local.y +
+        dir * local.z
+    );
+}
+
+// =====================================================
+// RGB -> LAB
+// =====================================================
+
+[numthreads(8,8,1)]
+void RGB_TO_LAB(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= ImageSize.x ||
+        id.y >= ImageSize.y)
+        return;
+
+    // URP camera texture in Linear space
+
+    float3 rgb = Input[id.xy].rgb;
+
+    rgb = max(rgb, 0.0);
+
+    float3 xyz = mul(RGB_TO_XYZ, rgb);
+
+    float3 f = LabF(xyz / D65);
+
+    float3 lab;
+
+    lab.x = 116.0 * f.y - 16.0;
+    lab.y = 500.0 * (f.x - f.y);
+    lab.z = 200.0 * (f.y - f.z);
+
+    Result[id.xy] = float4(lab, 1.0);
+}
+
+// =====================================================
+// LAB -> RGB + OPTIMIZATION
+// =====================================================
+
+[numthreads(8,8,1)]
+void LAB_TO_RGB(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= ImageSize.x ||
+        id.y >= ImageSize.y)
+        return;
+
+    uint index =
+        id.y * ImageSize.x + id.x;
+
+    // =================================================
+    // FOVEATION
+    // =================================================
+
+    float2 center =
+        float2(ImageSize) * 0.5;
+
+    float norm =
+        distance(id.xy, center)
+        / ImageSize.x;
+
+    float t1 =
+        smoothstep(
+            FoveaRadius,
+            ParafoveaRadius,
+            norm
+        );
+
+    float t2 =
+        smoothstep(
+            ParafoveaRadius,
+            0.5,
+            norm
+        );
+
+    float deltaE =
+        lerp(
+            lerp(
+                DeltaEFovea,
+                DeltaEParafovea,
+                t1
+            ),
+            lerp(
+                DeltaEParafovea,
+                DeltaEPeriphery,
+                t2
+            ),
+            t2
+        );
+
+    // =================================================
+    // BASE LAB
+    // =================================================
+
+    float3 baseLab =
+        Input[id.xy].rgb;
+
+    float fy0 = (baseLab.x + 16.0) / 116.0;
+    float fx0 = fy0 + baseLab.y / 500.0;
+    float fz0 = fy0 - baseLab.z / 200.0;
+
+    float3 baseRGB =
+        SafeRGB(
+            mul(
+                XYZ_TO_RGB,
+                LabFInv(float3(fx0, fy0, fz0))
+                * D65
+            )
+        );
+
+    float baseE =
+        EnergyOLED(baseRGB);
+
+    float bestE = baseE;
+
+    float3 bestRGB = baseRGB;
+
+    // =================================================
+    // INITIAL DIRECTIONS
+    // =================================================
+
+    float3 dirs[8] =
+    {
+        normalize(float3( 1, 1, 1)),
+        normalize(float3( 1, 1,-1)),
+        normalize(float3( 1,-1, 1)),
+        normalize(float3( 1,-1,-1)),
+        normalize(float3(-1, 1, 1)),
+        normalize(float3(-1, 1,-1)),
+        normalize(float3(-1,-1, 1)),
+        normalize(float3(-1,-1,-1))
+    };
+
+    float3 bestDir = dirs[0];
+
+    [unroll]
+    for (int i = 0; i < 8; i++)
+    {
+        float3 lab =
+            baseLab +
+            dirs[i] * deltaE;
+
+        float fy =
+            (lab.x + 16.0) / 116.0;
+
+        float fx =
+            fy + lab.y / 500.0;
+
+        float fz =
+            fy - lab.z / 200.0;
+
+        float3 rgb =
+            SafeRGB(
+                mul(
+                    XYZ_TO_RGB,
+                    LabFInv(float3(fx, fy, fz))
+                    * D65
+                )
+            );
+
+        float e = EnergyOLED(rgb);
+
+        if (e < bestE)
+        {
+            bestE = e;
+            bestDir = dirs[i];
+            bestRGB = rgb;
+        }
+    }
+
+    // =================================================
+    // CONE SEARCH
+    // =================================================
+
+    float coneAngle = 0.65;
+
+    [loop]
+    for (int i = 0; i < CandidateSamples; i++)
+    {
+        float2 r = Rand(id.xy, i);
+
+        float3 refinedDir =
+            SampleCone8(
+                bestDir,
+                r.x,
+                r.y,
+                coneAngle
+            );
+
+        float3 lab =
+            baseLab +
+            refinedDir * deltaE;
+
+        float fy =
+            (lab.x + 16.0) / 116.0;
+
+        float fx =
+            fy + lab.y / 500.0;
+
+        float fz =
+            fy - lab.z / 200.0;
+
+        float3 rgb =
+            SafeRGB(
+                mul(
+                    XYZ_TO_RGB,
+                    LabFInv(float3(fx, fy, fz))
+                    * D65
+                )
+            );
+
+        float e = EnergyOLED(rgb);
+
+        if (e < bestE)
+        {
+            bestE = e;
+            bestRGB = rgb;
+        }
+    }
+
+    // =================================================
+    // OUTPUT
+    // =================================================
+
+    
+    // IMPORTANT:
+    // NO LinearToSRGB here.
+    // URP handles final conversion.
+
+    Result[id.xy] =
+        float4(bestRGB, 1.0);
+}
