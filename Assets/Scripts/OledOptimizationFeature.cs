@@ -106,10 +106,10 @@ public class OledOptimizationFeature : ScriptableRendererFeature
                     int h = Screen.height;
                     float deltaEFovea = 2.0f;
                     float deltaEParafovea = 4.0f;
-                    float deltaEPeriphery = 8.0f;
-                    float foveaRadius = 0.08f;
-                    float parafoveaRadius = 0.25f;
-                    int candidateSamples = 16;
+                    float deltaEPeriphery = 6.0f;
+                    float foveaRadius = 0.04f;
+                    float parafoveaRadius = 0.12f;
+                    int candidateSamples = 8;
                     
                     cmd.SetComputeFloatParam(d.cs, "DeltaEFovea", deltaEFovea);
                     cmd.SetComputeFloatParam(d.cs, "DeltaEParafovea", deltaEParafovea);
@@ -122,10 +122,10 @@ public class OledOptimizationFeature : ScriptableRendererFeature
 
                     cmd.SetComputeIntParams(d.cs, "ImageSize", w, h);
 
-                    //cmd.SetComputeFloatParam(d.cs, "wr", wr);
-                    //cmd.SetComputeFloatParam(d.cs, "wg", wg);
-                    //cmd.SetComputeFloatParam(d.cs, "wb", wb);
-                    //cmd.SetComputeFloatParam(d.cs, "wrgb", wrgb);
+                    cmd.SetComputeFloatParam(d.cs, "wr", 0.55f);
+                    cmd.SetComputeFloatParam(d.cs, "wg", 0.35f);
+                    cmd.SetComputeFloatParam(d.cs, "wb", 1.0f);
+                    cmd.SetComputeFloatParam(d.cs, "wrgb", 0.05f);
 
                     // =========================
                     // RGB -> LAB

@@ -82,19 +82,9 @@ float3 LabFInv(float3 t)
 float EnergyOLED(float3 rgb)
 {
     rgb = saturate(rgb);
-
-    float luminance =
-        0.2126 * pow(rgb.r, 2.4) +
-        0.7152 * pow(rgb.g, 2.2) +
-        0.0722 * pow(rgb.b, 2.8);
-
-    return luminance;
-
-    // alternative model:
-    // return wr * rgb.r +
-    //        wg * rgb.g +
-    //        wb * rgb.b +
-    //        wrgb * rgb.r * rgb.g * rgb.b;
+    rgb = pow(rgb, 2.2);
+    
+    return wr * rgb.r + wg * rgb.g + wb * rgb.b;
 }
 
 // =====================================================
