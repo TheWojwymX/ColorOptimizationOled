@@ -18,16 +18,12 @@ public class RgbLabSave : MonoBehaviour
 
     [Range(0f, 0.5f)]
     public float parafoveaRadius = 0.25f;
-
-    [Header("Optimization")]
-    [Range(1, 64)]
-    public int candidateSamples = 16;
-
+    
     [Header("OLED Model")]
     public float wr = 0.25f;
     public float wg = 0.65f;
     public float wb = 0.10f;
-    public float wrgb = 0.05f;
+    public float wrgb = 0.05f; // NIEUZYWANY / ZREZYGNOWANO Z POPRZEDNIEGO MODELU
 
     const int THREADS = 8;
 
@@ -53,7 +49,6 @@ public class RgbLabSave : MonoBehaviour
         compute.SetTexture(kRgbToLab, "Input", src);
         compute.SetTexture(kRgbToLab, "Result", lab);
         compute.SetInts("ImageSize", w, h);
-        compute.SetInt("CandidateSamples", candidateSamples);
 
         Dispatch(kRgbToLab, w, h);
 

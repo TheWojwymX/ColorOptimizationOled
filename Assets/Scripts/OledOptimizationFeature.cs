@@ -109,7 +109,6 @@ public class OledOptimizationFeature : ScriptableRendererFeature
                     float deltaEPeriphery = 6.0f;
                     float foveaRadius = 0.04f;
                     float parafoveaRadius = 0.12f;
-                    int candidateSamples = 8;
                     
                     cmd.SetComputeFloatParam(d.cs, "DeltaEFovea", deltaEFovea);
                     cmd.SetComputeFloatParam(d.cs, "DeltaEParafovea", deltaEParafovea);
@@ -117,9 +116,7 @@ public class OledOptimizationFeature : ScriptableRendererFeature
 
                     cmd.SetComputeFloatParam(d.cs, "FoveaRadius", foveaRadius);
                     cmd.SetComputeFloatParam(d.cs, "ParafoveaRadius", parafoveaRadius);
-
-                    cmd.SetComputeIntParam(d.cs, "CandidateSamples", candidateSamples);
-
+                    
                     cmd.SetComputeIntParams(d.cs, "ImageSize", w, h);
 
                     cmd.SetComputeFloatParam(d.cs, "wr", 0.55f);

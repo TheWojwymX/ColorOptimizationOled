@@ -436,23 +436,23 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 694399793}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: e2c5e198bcde9c74aa641c1684b43c91, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RgbLabSave
   compute: {fileID: 7200000, guid: 0d065d0e67e828849a9f1592d9f34567, type: 3}
-  inputTexture: {fileID: 2800000, guid: 4f33b8c390fa7c74abcf17b9854d35ba, type: 3}
+  inputTexture: {fileID: 2800000, guid: 46abf765c88b9774599605f6a177e77e, type: 3}
   outputFileName: OledOptimized.png
   deltaEFovea: 2
-  deltaEParafovea: 4
-  deltaEPeriphery: 8
+  deltaEParafovea: 3
+  deltaEPeriphery: 4
   foveaRadius: 0.08
   parafoveaRadius: 0.25
   candidateSamples: 16
-  wr: 0.25
-  wg: 0.65
-  wb: 0.1
+  wr: 0.55
+  wg: 0.35
+  wb: 1
   wrgb: 0.05
 --- !u!114 &694399797
 MonoBehaviour:
