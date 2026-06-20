@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.IO;
+using System.Text;
 
 public class RgbLabSave : MonoBehaviour
 {
@@ -89,6 +90,7 @@ public class RgbLabSave : MonoBehaviour
 
         energyOriginal.GetData(orig);
         energyOptimized.GetData(opt);
+        SaveEnergyHistogram(orig, opt);
 
         double sumOrig = 0;
         double sumOpt = 0;
@@ -134,5 +136,45 @@ public class RgbLabSave : MonoBehaviour
         File.WriteAllBytes(path, bytes);
 
         Debug.Log("Saved to: " + path);
+    }
+    
+    void SaveEnergyHistogram(float[] orig, float[] opt, int bins = 100)
+    {
+        int[] histOrig = new int[bins];
+        int[] histOpt = new int[bins];
+
+        for (int i = 0; i < orig.Length; i++)
+        {
+            float e1 = Mathf.Clamp01(orig[i]);
+            float e2 = Mathf.Clamp01(opt[i]);
+
+            int b1 = Mathf.Min((int)(e1 * bins), bins - 1);
+            int b2 = Mathf.Min((int)(e2 * bins), bins - 1);
+
+            histOrig[b1]++;
+            histOpt[b2]++;
+        }
+
+        string path = Path.Combine(Application.dataPath, "energy_histogram.csv");
+
+        var sb = new StringBuilder();
+
+        sb.AppendLine("bin,original,optimized");
+
+        for (int i = 0; i < bins; i++)
+        {
+            int binId = i + 1; // <-- 1 do 100 (tak jak chciałeś)
+
+            sb.Append(binId);
+            sb.Append(",");
+            sb.Append(histOrig[i]);
+            sb.Append(",");
+            sb.Append(histOpt[i]);
+            sb.AppendLine();
+        }
+
+        File.WriteAllText(path, sb.ToString());
+
+        Debug.Log("Histogram saved to: " + path);
     }
 }
