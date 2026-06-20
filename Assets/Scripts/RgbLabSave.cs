@@ -83,6 +83,8 @@ public class RgbLabSave : MonoBehaviour
         outTex.Apply();
         RenderTexture.active = null;
 
+        SaveRGBHistogram(inputTexture, outTex);
+        
         Save(outTex);
 
         float[] orig = new float[pixelCount];
@@ -176,5 +178,65 @@ public class RgbLabSave : MonoBehaviour
         File.WriteAllText(path, sb.ToString());
 
         Debug.Log("Histogram saved to: " + path);
+    }
+    
+    void SaveRGBHistogram(Texture2D before, Texture2D after, int bins = 256)
+    {
+        int[] rBefore = new int[bins];
+        int[] gBefore = new int[bins];
+        int[] bBefore = new int[bins];
+
+        int[] rAfter = new int[bins];
+        int[] gAfter = new int[bins];
+        int[] bAfter = new int[bins];
+
+        Color[] beforePixels = before.GetPixels();
+        Color[] afterPixels = after.GetPixels();
+
+        int pixelCount = beforePixels.Length;
+
+        for (int i = 0; i < pixelCount; i++)
+        {
+            Color c1 = beforePixels[i];
+            Color c2 = afterPixels[i];
+
+            int rb = Mathf.Clamp((int)(c1.r * (bins - 1)), 0, bins - 1);
+            int gb = Mathf.Clamp((int)(c1.g * (bins - 1)), 0, bins - 1);
+            int bb = Mathf.Clamp((int)(c1.b * (bins - 1)), 0, bins - 1);
+
+            int ra = Mathf.Clamp((int)(c2.r * (bins - 1)), 0, bins - 1);
+            int ga = Mathf.Clamp((int)(c2.g * (bins - 1)), 0, bins - 1);
+            int ba = Mathf.Clamp((int)(c2.b * (bins - 1)), 0, bins - 1);
+
+            rBefore[rb]++;
+            gBefore[gb]++;
+            bBefore[bb]++;
+
+            rAfter[ra]++;
+            gAfter[ga]++;
+            bAfter[ba]++;
+        }
+
+        string path = Path.Combine(Application.dataPath, "rgb_histogram.csv");
+
+        var sb = new StringBuilder();
+
+        sb.AppendLine("bin,r_before,g_before,b_before,r_after,g_after,b_after");
+
+        for (int i = 0; i < bins; i++)
+        {
+            sb.Append(i + 1).Append(",");
+            sb.Append(rBefore[i]).Append(",");
+            sb.Append(gBefore[i]).Append(",");
+            sb.Append(bBefore[i]).Append(",");
+            sb.Append(rAfter[i]).Append(",");
+            sb.Append(gAfter[i]).Append(",");
+            sb.Append(bAfter[i]);
+            sb.AppendLine();
+        }
+
+        File.WriteAllText(path, sb.ToString());
+
+        Debug.Log("RGB histogram saved to: " + path);
     }
 }
