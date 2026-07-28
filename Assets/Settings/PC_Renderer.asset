@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 786dae6029163b548bbcb3b005be982f, type: 3}
   m_Name: OledOptimizationFeature
   m_EditorClassIdentifier: Assembly-CSharp::OledOptimizationFeature
-  m_Active: 1
+  m_Active: 0
   compute: {fileID: 7200000, guid: d54fdb7cefaca10408075b45ec785983, type: 3}
 --- !u!114 &11400000
 MonoBehaviour:

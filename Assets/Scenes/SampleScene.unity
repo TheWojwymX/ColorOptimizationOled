@@ -131,7 +131,6 @@ GameObject:
   - component: {fileID: 330585545}
   - component: {fileID: 330585544}
   - component: {fileID: 330585547}
-  - component: {fileID: 330585548}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -257,18 +256,6 @@ MonoBehaviour:
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
   m_Version: 2
---- !u!114 &330585548
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 330585543}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 09f1e096cb1cd9a4dbf872e1a2c4d05e, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::RgbLabPostProcess
 --- !u!1 &410087039
 GameObject:
   m_ObjectHideFlags: 0
@@ -436,13 +423,13 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 694399793}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: e2c5e198bcde9c74aa641c1684b43c91, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RgbLabSave
   compute: {fileID: 7200000, guid: 0d065d0e67e828849a9f1592d9f34567, type: 3}
-  inputTexture: {fileID: 2800000, guid: 6eeceb7ece28e3449a04691fbfcd5814, type: 3}
+  inputTexture: {fileID: 2800000, guid: 8eeccd0b4642e38418ece5d0e92f4139, type: 3}
   outputFileName: OledOptimized.png
   deltaEFovea: 2
   deltaEParafovea: 3
