@@ -78,7 +78,7 @@ float3 LabToRGB(float3 lab)
     float fz = fy - lab.z / 200;
     float3 xyz = LabFInv(float3(fx, fy, fz)) * D65;
     float3 rgb = mul(XYZ_TO_RGB, xyz);
-    return SafeRGB(rgb);
+    return rgb;
 }
 
 float EnergyFromLab(float3 lab)
@@ -128,7 +128,7 @@ void LAB_TO_RGB(uint3 id : SV_DispatchThreadID)
     float3 baseRGB = LabToRGB(baseLab);
 
     // ----- Gradient numeryczny względem (L, a, b) -----
-    const float eps = 0.01;
+    const float eps = 0.5;
     float3 grad;
     grad.x = (EnergyFromLab(baseLab + float3(eps, 0, 0)) - e0) / eps;
     grad.y = (EnergyFromLab(baseLab + float3(0, eps, 0)) - e0) / eps;

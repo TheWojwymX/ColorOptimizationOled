@@ -165,7 +165,7 @@ public class RgbLabSave : MonoBehaviour
 
         for (int i = 0; i < bins; i++)
         {
-            int binId = i + 1; // <-- 1 do 100 (tak jak chciałeś)
+            int binId = i + 1; 
 
             sb.Append(binId);
             sb.Append(",");
