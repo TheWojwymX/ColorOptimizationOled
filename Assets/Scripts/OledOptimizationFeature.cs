@@ -105,8 +105,8 @@ public class OledOptimizationFeature : ScriptableRendererFeature
                     int w = Screen.width;
                     int h = Screen.height;
                     float deltaEFovea = 2.0f;
-                    float deltaEParafovea = 4.0f;
-                    float deltaEPeriphery = 6.0f;
+                    float deltaEParafovea = 3.0f;
+                    float deltaEPeriphery = 4.0f;
                     float foveaRadius = 0.04f;
                     float parafoveaRadius = 0.12f;
                     
